@@ -11,5 +11,10 @@ namespace TryMultiScan
     {
         public DbSet<Customer> Customers { get; set; }
         public DbSet<Post> Posts { get; set; }
+
+        protected override void OnModelCreating(DbModelBuilder modelBuilder)
+        {
+            modelBuilder.Entity<Post>().MapToStoredProcedures();
+        }
     }
 }

@@ -6,6 +6,7 @@ using System.Data;
 using System.IO;
 using System.Data.SqlClient;
 using Dapper;
+using System.Collections.Generic;
 
 namespace TryMultiScan.Tests
 {
@@ -19,16 +20,21 @@ namespace TryMultiScan.Tests
         {
             // arrange
             int expected;
+            int views = 5;
             using (var ctx = new MultiScanContext())
             {
                 var post = ctx.Posts.First();
-                expected = post.ViewCount + 2;
+                expected = post.ViewCount + views;
             }
+            List<Task> tasks = new List<Task>();
 
             // act
-            Task task1 = Task.Factory.StartNew(() => ViewPost());
-            Task task2 = Task.Factory.StartNew(() => ViewPost());
-            Task.WaitAll(task1, task2);
+            for (int i = 0; i < views; i++)
+            {
+                var task = Task.Factory.StartNew(() => ViewPost());
+                tasks.Add(task);
+            }
+            Task.WaitAll(tasks.ToArray());  // task1, task2, task3, task4, task5);
 
             // assert
             using (var ctx = new MultiScanContext())
@@ -39,7 +45,7 @@ namespace TryMultiScan.Tests
         }
 
         // using ef
-        private void ViewPost0()
+        private void ViewPost()
         {
             using (var ctx = new MultiScanContext())
             {
@@ -50,7 +56,7 @@ namespace TryMultiScan.Tests
         }
 
         // using ef w/ trans
-        private void ViewPost()
+        private void ViewPost1()
         {
             var filename = Guid.NewGuid().ToString() + ".txt";
             using (var ctx = new MultiScanContext())
@@ -113,6 +119,35 @@ namespace TryMultiScan.Tests
             }
         }
 
+        // using sproc
+        private void ViewPost5()
+        {
+            using (var cn = new SqlConnection(_connectionString))
+            {
+                cn.Execute("Usp_ViewPost", new { PostId = 1 }, commandType: CommandType.StoredProcedure);
+            }
+        }
 
+        // using sproc w/ trans in code
+        private void ViewPost6()
+        {
+            using (var cn = new SqlConnection(_connectionString))
+            {
+                cn.Open();
+                using (var trans = cn.BeginTransaction(IsolationLevel.ReadCommitted))
+                {
+                    try
+                    {
+                        cn.Execute("Usp_ViewPost", new { PostId = 1 }, commandType: CommandType.StoredProcedure, transaction: trans);
+                        trans.Commit();
+                    }
+                    catch
+                    {
+                        trans.Rollback();
+                        throw;
+                    }
+                }
+            }
+        }
     }
 }
